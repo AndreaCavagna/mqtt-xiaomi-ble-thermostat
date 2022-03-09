@@ -17,3 +17,8 @@ def poll_json(args):
     }
     print(json.dumps(thermo_dict))
 ```
+
+change this line 
+```parser_poll.set_defaults(func=poll)```
+with
+```parser_poll.set_defaults(func=poll_json)```
