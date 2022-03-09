@@ -2,23 +2,14 @@
 
 
 
-## CUSTOM JSON POLL FOR mibletemp
-```
-# add this in the demo.py file of the MiTemp project
+# CUSTOM JSON POLL FOR mibletemp
 def poll_json(args):
     backend = _get_backend(args)
     poller = MiTempBtPoller(args.mac, backend)
-    thermo_dict = {
-      "fw": poller.firmware_version(),
-      "name": poller.name(),
+    thisdict = {
       "battery": poller.parameter_value(MI_BATTERY),
-      "temperature": poller.parameter_value(MI_TEMPERATURE),
-      "humidity": poller.parameter_value(MI_HUMIDITY)
+      "temp": poller.parameter_value(MI_TEMPERATURE),
+      "hum": poller.parameter_value(MI_HUMIDITY)
     }
-    print(json.dumps(thermo_dict))
-```
+    print(json.dumps(thisdict))
 
-change this line 
-```parser_poll.set_defaults(func=poll)```
-with
-```parser_poll.set_defaults(func=poll_json)```

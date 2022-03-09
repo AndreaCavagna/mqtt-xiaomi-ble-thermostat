@@ -10,22 +10,13 @@ from datetime import datetime
 import argparse
 import math
 from btlewrap import available_backends, BluepyBackend, GatttoolBackend, PygattBackend
-from mitemp_bt.mitemp_bt_poller import MiTempBtPoller, \
-    MI_TEMPERATURE, MI_HUMIDITY, MI_BATTERY
+from mitemp_bt.mitemp_bt_poller import MiTempBtPoller, MI_TEMPERATURE, MI_HUMIDITY, MI_BATTERY
 
+
+# ------------------- MAIN  CONFIGURATION ------------------- #
+    
 XIAOMI_THERMOSTAT_MAC = "4c:65:a8:00:00:00"
 MQTT_TOPIC = "ambient/andreaBedroom"
-
-parser = argparse.ArgumentParser(description='')
-parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
-parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, help='mac address of the client')
-parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
-parser.add_argument("-b", '--backend', choices=['gatttool', 'bluepy', 'pygatt'], default='bluepy')
-
-args = parser.parse_args()
-
-# ------------------- START  CONFIGURATION ------------------- #
-
 MQTT_SERVER_ADDRESS = "server.mqtt.org" # or IP address
 MQTT_SERVER_PORT = 1883
 
@@ -59,6 +50,16 @@ LED_BRIGHTNESS_HIGH = 100
 LED_BRIGHTNESS_LOW = 0
 
 # ------------------- END CONFIGURATION ------------------- #
+
+
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
+parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, help='mac address of the client')
+parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
+parser.add_argument("-b", '--backend', choices=['gatttool', 'bluepy', 'pygatt'], default='bluepy')
+parser.add_argument("-s", "--server", type=str, default = MQTT_SERVER_ADDRESS, help='mqtt server to use')
+
+args = parser.parse_args()
 
 
 MOSQUITO_CLIENT_NAME = args.client
@@ -116,7 +117,7 @@ def connect_to_broker():
     not_connected = True
     while not_connected:
       try:
-        client.connect(MQTT_SERVER_ADDRESS, port=MQTT_SERVER_PORT)
+        client.connect(args.server, port=MQTT_SERVER_PORT)
         not_connected = False
         print(datetime.now())
         print('Im connected')
@@ -167,12 +168,12 @@ while True:
               "temperature": poller.parameter_value(MI_TEMPERATURE),
               "humidity": poller.parameter_value(MI_HUMIDITY)
             }
+            
+            
             print(thermo_dict)
               
-          
-              
             
-            res = subprocess.call(['ping', '-c', '1', MQTT_SERVER_ADDRESS], stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+            res = subprocess.call(['ping', '-c', '1', args.server], stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
             
             if res != 0:
               INTERNET_CONN_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)

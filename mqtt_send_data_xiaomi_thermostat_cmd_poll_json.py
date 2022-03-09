@@ -12,7 +12,6 @@ import statistics
 import math
 import sys
 
-
 # ------------------- MAIN  CONFIGURATION ------------------- #
     
 PATH_TO_CURRENT_FOLDER = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -58,7 +57,6 @@ LED_BRIGHTNESS_LOW = 0
 
 # ------------------- END CONFIGURATION ------------------- #
 
-
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
 parser.add_argument("-p", "--path", type=str, default = PATH_TO_CURRENT_FOLDER, help='path of the mitemp folder')
@@ -71,9 +69,7 @@ args = parser.parse_args()
 
 
 MOSQUITO_CLIENT_NAME = args.client
-COMMAND = "python3 " + str(args.path) + "/demo.py --backend bluepy poll " + str(args.mac)
-
-print(COMMAND)
+COMMAND = "python3 " + str(args.path) + "/demo.py --backend bluepy poll_json " + str(args.mac)
 
 GPIO.setmode(GPIO.BOARD)
 
@@ -160,42 +156,17 @@ while True:
             
             for i in range(3):
               try:
-                thermo_dict = {}
-                reply_string = os.popen(COMMAND).read()
-                reply_string_split = reply_string.split('\n')
-                
-                for val in reply_string_split:
-
-                  try:
-                    val_split = val.split(':')
-                    if val_split[0] == "FW":
-                      thermo_dict['fw'] = str(val_split[1]).strip()
-                      
-                    if val_split[0] == "Name":
-                      thermo_dict['name'] = str(val_split[1]).strip()
-                      
-                    if val_split[0] == "Battery":
-                      thermo_dict['battery'] = int(val_split[1])
-                      
-                    if val_split[0] == "Temperature":
-                      thermo_dict['temperature'] = float(val_split[1])
-                      
-                    if val_split[0] == "Humidity":
-                      thermo_dict['humidity'] = float(val_split[1])
-                      
-                  except Exception as e:
-                    print('nothing seriouss, probably there was an extra empty line')
-                  
+                json_string = os.popen(COMMAND).read()
+                thermo_dict = json.loads(json_string)
                 mi_ble_has_connected = True
                 cumulative_ble_retry = 0
                 break
-              except Exception as e:
-                print(e)
+              except:
                 print('Retrying BLE Connection')
                 cumulative_ble_retry += 1
                 time.sleep(15) 
                 pass
-                
+            
             print(thermo_dict)
               
             

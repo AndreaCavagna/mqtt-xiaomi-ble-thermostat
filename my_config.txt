@@ -1,0 +1,1 @@
+xiaomi_mad_address = 4c:65:a8:da:89:e9
