@@ -12,14 +12,16 @@ import statistics
 import math
 
 PATH_TO_MITEMP_FOLDER = "/home/pi/temperature/mitemp"
-XIAOMI_THERMOSTAT_MAC = "4c:65:a8:da:89:e9"
+XIAOMI_THERMOSTAT_MAC = "40:65:a8:da:89:00"
 MQTT_TOPIC = "ambient/andreaBedroom"
+MAX_BLE_RETRIES_ENABLED = True
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
 parser.add_argument("-p", "--path", type=str, default = PATH_TO_MITEMP_FOLDER, help='path of the mitemp folder')
 parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, help='mac address of the client')
 parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
+parser.add_argument("-r", "--faliurereboot", type=bool, default = MAX_BLE_RETRIES_ENABLED, help='If the device fails to get the temperature for the number of times specified in MAX_BLE_RETRIES it will reboot')
 
 args = parser.parse_args()
 
@@ -53,8 +55,9 @@ LEDs_OFF_END_HOUR = 25
 
 # --------- RECONNECTIONS ---------- #
 
-MAX_BLE_RETRIES = 3
-
+# max connection retries with the thermostat
+# if the connection fails for this amount of time the board will reboot
+MAX_BLE_RETRIES = 10
 # --------- LED BRIGHTNESS ---------- #
 
 # i connected the leds directly to the 3v3 rail, if you want to power them from the pin invert these values
@@ -163,7 +166,7 @@ while True:
                 pass
               
             
-            if cumulative_ble_retry == MAX_BLE_RETRIES:
+            if cumulative_ble_retry == MAX_BLE_RETRIES and args.faliurereboot:
               json_string = os.popen("sudo reboot")
               time.sleep(15)
               
