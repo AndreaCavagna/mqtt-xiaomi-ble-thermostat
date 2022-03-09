@@ -1,0 +1,27 @@
+- platform: mqtt
+  name: "Xiaomi Thermostat Temperature"
+  unique_id: bedroom_temperature_mqtt
+  device_class: temperature
+  state_topic: "ambient/andreaBedroom/temperature"
+  unit_of_measurement: "°C"
+  value_template: "{{ value }}"
+- platform: mqtt
+  device_class: humidity
+  name: "Xiaomi Thermostat Humidity"
+  unique_id: bedroom_humidity_mqtt
+  state_topic: "ambient/andreaBedroom/humidity"
+  unit_of_measurement: "%"
+  value_template: "{{ value }}"
+- platform: mqtt
+  device_class: temperature
+  name: "Xiaomi Thermostat Dew Point"
+  state_topic: "ambient/andreaBedroom/dew_point"
+  unit_of_measurement: "°C"
+  value_template: "{{ value }}"
+- platform: mqtt
+  device_class: battery
+  name: "Xiaomi Thermostat Battery"
+  unique_id: "xiaomi_thermostat_bedroom_battery"
+  state_topic: "ambient/andreaBedroom/battery"
+  unit_of_measurement: "%"
+  value_template: "{{ value }}"
