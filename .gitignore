@@ -1,5 +1,8 @@
 
 /mitemp/*
+/btlewrap/*
+/mitemp_bt/*
+/demo.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

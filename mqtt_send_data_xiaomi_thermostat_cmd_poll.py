@@ -8,21 +8,25 @@ import subprocess
 import paho.mqtt.client as mqtt
 from datetime import datetime
 import argparse
+import statistics
 import math
-from btlewrap import available_backends, BluepyBackend, GatttoolBackend, PygattBackend
-from mitemp_bt.mitemp_bt_poller import MiTempBtPoller, \
-    MI_TEMPERATURE, MI_HUMIDITY, MI_BATTERY
-
+import sys
+    
+PATH_TO_CURRENT_FOLDER = os.path.dirname(os.path.realpath(sys.argv[0]))
 XIAOMI_THERMOSTAT_MAC = "4c:65:a8:00:00:00"
 MQTT_TOPIC = "ambient/andreaBedroom"
+MAX_BLE_RETRIES_ENABLED = True
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
+parser.add_argument("-p", "--path", type=str, default = PATH_TO_CURRENT_FOLDER, help='path of the mitemp folder')
 parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, help='mac address of the client')
 parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
-parser.add_argument("-b", '--backend', choices=['gatttool', 'bluepy', 'pygatt'], default='bluepy')
+parser.add_argument("-r", "--faliurereboot", type=bool, default = MAX_BLE_RETRIES_ENABLED, help='If the device fails to get the temperature for the number of times specified in MAX_BLE_RETRIES it will reboot')
 
 args = parser.parse_args()
+
+
 
 # ------------------- START  CONFIGURATION ------------------- #
 
@@ -52,6 +56,11 @@ LOOP_TIMEOUT = 150
 LEDs_OFF_START_HOUR = -1
 LEDs_OFF_END_HOUR = 25
 
+# --------- RECONNECTIONS ---------- #
+
+# max connection retries with the thermostat
+# if the connection fails for this amount of time the board will reboot
+MAX_BLE_RETRIES = 10
 # --------- LED BRIGHTNESS ---------- #
 
 # i connected the leds directly to the 3v3 rail, if you want to power them from the pin invert these values
@@ -62,6 +71,7 @@ LED_BRIGHTNESS_LOW = 0
 
 
 MOSQUITO_CLIENT_NAME = args.client
+COMMAND = "python3 " + str(args.path) + "/demo.py --backend bluepy poll_json " + str(args.mac)
 
 GPIO.setmode(GPIO.BOARD)
 
@@ -80,6 +90,7 @@ INTERNET_CONN_LED_PWM.start(0)
 HUM_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)
 TEMP_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)
 INTERNET_CONN_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)
+
 
 def calculate_dew_point(T,RH):
   b = 17.62
@@ -126,18 +137,6 @@ def connect_to_broker():
         print(datetime.now())
         print('Failed connection')
         time.sleep(15)
-        
-def _get_backend(args):
-    """Extract the backend class from the command line arguments."""
-    if args.backend == 'gatttool':
-        backend = GatttoolBackend
-    elif args.backend == 'bluepy':
-        backend = BluepyBackend
-    elif args.backend == 'pygatt':
-        backend = PygattBackend
-    else:
-        raise Exception('unknown backend: {}'.format(args.backend))
-    return backend
   
       
 client = mqtt.Client(MOSQUITO_CLIENT_NAME)
@@ -150,9 +149,6 @@ client.loop_start()
 
 cumulative_ble_retry = 0
 
-backend = _get_backend(args)
-poller = MiTempBtPoller(args.mac, backend)
-
 while True:
   try:
             hum_min_flag = False
@@ -160,16 +156,24 @@ while True:
               
             mi_ble_has_connected = False
             
-            thermo_dict = {
-              "fw": poller.firmware_version(),
-              "name": poller.name(),
-              "battery": poller.parameter_value(MI_BATTERY),
-              "temperature": poller.parameter_value(MI_TEMPERATURE),
-              "humidity": poller.parameter_value(MI_HUMIDITY)
-            }
-            print(thermo_dict)
+            for i in range(3):
+              try:
+                json_string = os.popen(COMMAND).read()
+                obj = json.loads(json_string)
+                print(obj)
+                mi_ble_has_connected = True
+                cumulative_ble_retry = 0
+                break
+              except:
+                print('Retrying BLE Connection')
+                cumulative_ble_retry += 1
+                time.sleep(15) 
+                pass
               
-          
+            
+            if cumulative_ble_retry == MAX_BLE_RETRIES and args.faliurereboot:
+              json_string = os.popen("sudo reboot")
+              time.sleep(15)
               
             
             res = subprocess.call(['ping', '-c', '1', MQTT_SERVER_ADDRESS], stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
@@ -180,23 +184,23 @@ while True:
             else:
               INTERNET_CONN_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_LOW)
             
-            client.publish(str(args.topic) + "/temperature",str(thermo_dict['temperature']))
-            client.publish(str(args.topic) + "/humidity",str(thermo_dict['humidity']))
-            client.publish(str(args.topic) + "/battery",str(thermo_dict['battery']))
-            client.publish(str(args.topic) + "/dew_point", "{:.1f}". format(calculate_dew_point(thermo_dict['temperature'],thermo_dict['humidity'])))
+            client.publish(str(args.topic) + "/temperature",str(obj['temperature']))
+            client.publish(str(args.topic) + "/humidity",str(obj['humidity']))
+            client.publish(str(args.topic) + "/battery",str(obj['battery']))
+            client.publish(str(args.topic) + "/dew_point", "{:.1f}". format(calculate_dew_point(obj['temperature'],obj['humidity'])))
                
             
             if datetime.now().hour <= LEDs_OFF_START_HOUR and datetime.now().hour >= LEDs_OFF_END_HOUR:
-              if thermo_dict['temperature'] >= TEMP_MAX_THRES:
+              if obj['temperature'] >= TEMP_MAX_THRES:
                 TEMP_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)
-              elif thermo_dict['temperature'] <= TEMP_MIN_THRES:
+              elif obj['temperature'] <= TEMP_MIN_THRES:
                 temp_min_flag = True
               else:
                 TEMP_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_LOW)
   
-              if thermo_dict['humidity'] >= HUM_MAX_TRESH:
+              if obj['humidity'] >= HUM_MAX_TRESH:
                 HUM_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_HIGH)
-              elif thermo_dict['humidity'] <= HUM_MIN_TRESH:
+              elif obj['humidity'] <= HUM_MIN_TRESH:
                 hum_min_flag = True
               else:
                 HUM_LED_PWM.ChangeDutyCycle(LED_BRIGHTNESS_LOW)
