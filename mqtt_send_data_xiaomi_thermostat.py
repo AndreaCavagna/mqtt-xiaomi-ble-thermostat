@@ -1,3 +1,4 @@
+from functools import cache
 import Adafruit_DHT
 import RPi.GPIO as GPIO
 import subprocess
@@ -19,12 +20,15 @@ XIAOMI_THERMOSTAT_MAC = "4c:65:a8:00:00:00"
 MQTT_TOPIC = "ambient/andreaBedroom"
 MQTT_SERVER_ADDRESS = "server.mqtt.org" # or IP address
 MQTT_SERVER_PORT = 1883
+POLLER_INTERVAL = 120
+
 
 # --------- BOARD CONFIGURATION ---------- #
 
 TEMP_LED = 11
 INTERNET_CONN_LED = 12
 HUM_LED = 13
+ADAPTER_BLE = 'hci0'
 
 # ------------ THRESH ------------- #
 
@@ -58,9 +62,10 @@ parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, he
 parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
 parser.add_argument("-b", '--backend', choices=['gatttool', 'bluepy', 'pygatt'], default='bluepy')
 parser.add_argument("-s", "--server", type=str, default = MQTT_SERVER_ADDRESS, help='mqtt server to use')
+parser.add_argument("-p", "--pollerInterval", type=int, default = POLLER_INTERVAL, help='Interval to poll the thermostat')
+parser.add_argument("-a", "--adapterBLE", type=str, default = ADAPTER_BLE, help='Name of the bluetooth interface')
 
 args = parser.parse_args()
-
 
 MOSQUITO_CLIENT_NAME = args.client
 
@@ -152,7 +157,7 @@ client.loop_start()
 cumulative_ble_retry = 0
 
 backend = _get_backend(args)
-poller = MiTempBtPoller(args.mac, backend)
+poller = MiTempBtPoller(args.mac, backend, cache_timeout=args.pollerInterval, retries=3, adapter=args.adapterBLE)
 
 while True:
   try:
