@@ -12,13 +12,13 @@ import argparse
 import math
 from btlewrap import available_backends, BluepyBackend, GatttoolBackend, PygattBackend
 from mitemp_bt.mitemp_bt_poller import MiTempBtPoller, MI_TEMPERATURE, MI_HUMIDITY, MI_BATTERY
-
+from bluepy_custom_scanner import BluepyCustomScanner
 
 # ------------------- MAIN  CONFIGURATION ------------------- #
     
-XIAOMI_THERMOSTAT_MAC = "4c:65:a8:00:00:00"
+XIAOMI_THERMOSTAT_MAC = "4c:65:a8:da:89:e9"
 MQTT_TOPIC = "ambient/andreaBedroom"
-MQTT_SERVER_ADDRESS = "server.mqtt.org" # or IP address
+MQTT_SERVER_ADDRESS = "192.168.123.16" # Hostname or IP address
 MQTT_SERVER_PORT = 1883
 POLLER_INTERVAL = 120
 
@@ -29,6 +29,7 @@ TEMP_LED = 11
 INTERNET_CONN_LED = 12
 HUM_LED = 13
 ADAPTER_BLE = 'hci0'
+RSSI_SCANTIME_SEC = 10 # -> ONLY IF BACKEND IS BLUEPY
 
 # ------------ THRESH ------------- #
 
@@ -56,7 +57,7 @@ LED_BRIGHTNESS_LOW = 0
 # ------------------- END CONFIGURATION ------------------- #
 
 
-parser = argparse.ArgumentParser(description='')
+parser = argparse.ArgumentParser(description='Select your preferences, if you use BluePy as your backend you will get also the RSSI of the BLE connection')
 parser.add_argument("-c", "--client", type=str, default = 'MQTT_XIAOMI_THERMOSTAT', help='name of the mqtt client')
 parser.add_argument("-m", "--mac", type=str, default = XIAOMI_THERMOSTAT_MAC, help='mac address of the client')
 parser.add_argument("-t", "--topic", type=str, default = MQTT_TOPIC, help='mqtt topic to use')
@@ -64,6 +65,7 @@ parser.add_argument("-b", '--backend', choices=['gatttool', 'bluepy', 'pygatt'],
 parser.add_argument("-s", "--server", type=str, default = MQTT_SERVER_ADDRESS, help='mqtt server to use')
 parser.add_argument("-p", "--pollerInterval", type=int, default = POLLER_INTERVAL, help='Interval to poll the thermostat')
 parser.add_argument("-a", "--adapterBLE", type=str, default = ADAPTER_BLE, help='Name of the bluetooth interface')
+parser.add_argument("--scanTime", type=float, default = RSSI_SCANTIME_SEC, help='ONLY BLUEPY, time of the BLE scan in order to retreive the RSSI')
 
 args = parser.parse_args()
 
@@ -159,6 +161,12 @@ cumulative_ble_retry = 0
 backend = _get_backend(args)
 poller = MiTempBtPoller(args.mac, backend, cache_timeout=args.pollerInterval, retries=3, adapter=args.adapterBLE)
 
+
+if args.backend == 'bluepy':
+  BLE_Scanner = BluepyCustomScanner()
+
+
+print('starting loop')
 while True:
   try:
             hum_min_flag = False
@@ -173,6 +181,9 @@ while True:
               "temperature": poller.parameter_value(MI_TEMPERATURE),
               "humidity": poller.parameter_value(MI_HUMIDITY)
             }
+
+            if args.backend == 'bluepy':
+              ble_rssi = BLE_Scanner.getRSSI(args.mac, float(args.scanTime))
             
             
             print(thermo_dict)
@@ -190,7 +201,10 @@ while True:
             client.publish(str(args.topic) + "/humidity",str(thermo_dict['humidity']))
             client.publish(str(args.topic) + "/battery",str(thermo_dict['battery']))
             client.publish(str(args.topic) + "/dew_point", "{:.1f}". format(calculate_dew_point(thermo_dict['temperature'],thermo_dict['humidity'])))
-               
+            if not ble_rssi:
+              client.publish(str(args.topic) + "/RSSI", 'false')
+            else:
+              client.publish(str(args.topic) + "/RSSI", int(ble_rssi))
             
             if datetime.now().hour <= LEDs_OFF_START_HOUR and datetime.now().hour >= LEDs_OFF_END_HOUR:
               if thermo_dict['temperature'] >= TEMP_MAX_THRES:
